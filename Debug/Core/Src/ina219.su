@@ -1,0 +1,17 @@
+../Core/Src/ina219.c:32:6:wireWriteRegister	40	static
+../Core/Src/ina219.c:46:6:wireReadRegister	40	static
+../Core/Src/ina219.c:64:6:setCalibration_32V_2A	16	static
+../Core/Src/ina219.c:154:6:setCalibration_32V_1A	16	static
+../Core/Src/ina219.c:242:6:setCalibration_16V_400mA	16	static
+../Core/Src/ina219.c:331:9:getBusVoltage_raw	16	static
+../Core/Src/ina219.c:345:9:getShuntVoltage_raw	16	static
+../Core/Src/ina219.c:357:9:getCurrent_raw	16	static
+../Core/Src/ina219.c:378:9:getPower_raw	16	static
+../Core/Src/ina219.c:399:7:getShuntVoltage_mV	16	static
+../Core/Src/ina219.c:411:7:getBusVoltage_V	16	static
+../Core/Src/ina219.c:423:7:getCurrent_mA	16	static
+../Core/Src/ina219.c:436:7:getPower_mW	16	static
+../Core/Src/ina219.c:446:5:contMeasureInit	32	static
+../Core/Src/ina219.c:466:5:contMeasureUpdate	24	static
+../Core/Src/ina219.c:488:7:convertMeasure	24	static
+../Core/Src/ina219.c:518:5:getNSamples	4	static
