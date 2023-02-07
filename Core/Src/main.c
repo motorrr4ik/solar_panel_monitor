@@ -34,6 +34,7 @@
 /* USER CODE BEGIN PD */
 #define CURRENT_MEDIUM_AVERAGE_FILTER_STEP 40
 #define POWER_MEDIUM_AVERAGE_FILTER_STEP 40
+#define VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP 5
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -71,6 +72,7 @@ static void MX_TIM1_Init(void);
 /* USER CODE BEGIN 0 */
 int CURRENT_FILTER_COUNTER = 0;
 int POWER_FILTER_COUNTER = 0;
+int VOLTAGE_FILTER_COUNTER = 0;
 float current_filter_data[CURRENT_MEDIUM_AVERAGE_FILTER_STEP] = {0};
 float current_filter_sum_value = 0;
 float current_value = 0;
@@ -80,6 +82,11 @@ float power_filter_data[POWER_MEDIUM_AVERAGE_FILTER_STEP] = {0};
 float power_filter_sum_value = 0;
 float power_value = 0;
 float average_power_value = 0;
+
+float voltage_filter_data[VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP] = {0};
+float voltage_filter_sum_value = 0;
+float voltage_value = 0;
+float average_voltage_value = 0;
 
 typedef struct
 {
@@ -110,9 +117,17 @@ void from_output_packet()
 	POWER_FILTER_COUNTER = (POWER_FILTER_COUNTER + 1) % POWER_MEDIUM_AVERAGE_FILTER_STEP;
 	average_power_value = power_filter_sum_value / POWER_MEDIUM_AVERAGE_FILTER_STEP;
 
+	//filtering voltage
+	voltage_filter_sum_value = voltage_filter_sum_value - voltage_filter_data[VOLTAGE_FILTER_COUNTER];
+	voltage_value = getBusVoltage_V();
+	voltage_filter_data[VOLTAGE_FILTER_COUNTER] = voltage_value;
+	voltage_filter_sum_value += voltage_value;
+	VOLTAGE_FILTER_COUNTER = (VOLTAGE_FILTER_COUNTER + 1) % VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP;
+	average_voltage_value = voltage_filter_sum_value / VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP;
+
 	data.header = 'NNNN';
 	data.ina219_current_value = average_current_value;
-	data.ina219_voltage_value = getBusVoltage_V();
+	data.ina219_voltage_value = average_voltage_value;
 	data.ina219_power_value = average_power_value;
 	data.terminator = 'EEEE';
 }
