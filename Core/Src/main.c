@@ -32,6 +32,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define CURRENT_MEDIUM_AVERAGE_FILTER_STEP 40
+#define POWER_MEDIUM_AVERAGE_FILTER_STEP 40
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -42,6 +44,7 @@
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c2;
 
+TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart2;
@@ -59,12 +62,25 @@ static void MX_DMA_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int CURRENT_FILTER_COUNTER = 0;
+int POWER_FILTER_COUNTER = 0;
+float current_filter_data[CURRENT_MEDIUM_AVERAGE_FILTER_STEP] = {0};
+float current_filter_sum_value = 0;
+float current_value = 0;
+float average_current_value = 0;
+
+float power_filter_data[POWER_MEDIUM_AVERAGE_FILTER_STEP] = {0};
+float power_filter_sum_value = 0;
+float power_value = 0;
+float average_power_value = 0;
+
 typedef struct
 {
 	uint32_t header;
@@ -78,10 +94,26 @@ ina219_sensor_data data;
 
 void from_output_packet()
 {
+	//filtering current
+	current_filter_sum_value = current_filter_sum_value - current_filter_data[CURRENT_FILTER_COUNTER];
+	current_value = getCurrent_mA();
+	current_filter_data[CURRENT_FILTER_COUNTER] = current_value;
+	current_filter_sum_value += current_value;
+	CURRENT_FILTER_COUNTER = (CURRENT_FILTER_COUNTER + 1) % CURRENT_MEDIUM_AVERAGE_FILTER_STEP;
+	average_current_value = current_filter_sum_value / CURRENT_MEDIUM_AVERAGE_FILTER_STEP;
+
+	//filtering power
+	power_filter_sum_value = power_filter_sum_value - power_filter_data[POWER_FILTER_COUNTER];
+	power_value = getPower_mW();
+	power_filter_data[POWER_FILTER_COUNTER] = power_value;
+	power_filter_sum_value += power_value;
+	POWER_FILTER_COUNTER = (POWER_FILTER_COUNTER + 1) % POWER_MEDIUM_AVERAGE_FILTER_STEP;
+	average_power_value = power_filter_sum_value / POWER_MEDIUM_AVERAGE_FILTER_STEP;
+
 	data.header = 'NNNN';
-	data.ina219_current_value = getCurrent_mA();
+	data.ina219_current_value = average_current_value;
 	data.ina219_voltage_value = getBusVoltage_V();
-	data.ina219_power_value = getPower_mW();
+	data.ina219_power_value = average_power_value;
 	data.terminator = 'EEEE';
 }
 /* USER CODE END 0 */
@@ -118,8 +150,10 @@ int main(void)
   MX_I2C2_Init();
   MX_USART2_UART_Init();
   MX_TIM4_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim4);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   setCalibration_32V_1A();
   /* USER CODE END 2 */
 
@@ -205,6 +239,81 @@ static void MX_I2C2_Init(void)
 }
 
 /**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 80;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 999;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 449;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
   * @brief TIM4 Initialization Function
   * @param None
   * @retval None
@@ -223,9 +332,9 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 799;
+  htim4.Init.Prescaler = 80;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 100;
+  htim4.Init.Period = 99;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
