@@ -70,24 +70,35 @@ static void MX_TIM1_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+//filter counters
 int CURRENT_FILTER_COUNTER = 0;
 int POWER_FILTER_COUNTER = 0;
 int VOLTAGE_FILTER_COUNTER = 0;
+
+// vars for current filter
 float current_filter_data[CURRENT_MEDIUM_AVERAGE_FILTER_STEP] = {0};
 float current_filter_sum_value = 0;
 float current_value = 0;
 float average_current_value = 0;
+float delta_I = 0;
+float prev_I = 0;
 
+// vars for power filter
 float power_filter_data[POWER_MEDIUM_AVERAGE_FILTER_STEP] = {0};
 float power_filter_sum_value = 0;
 float power_value = 0;
 float average_power_value = 0;
 
+// vars for voltage filter
 float voltage_filter_data[VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP] = {0};
 float voltage_filter_sum_value = 0;
 float voltage_value = 0;
 float average_voltage_value = 0;
+float delta_V = 0;
+float prev_V = 0;
 
+//uart data structure
 typedef struct
 {
 	uint32_t header;
@@ -99,7 +110,7 @@ typedef struct
 
 ina219_sensor_data data;
 
-void from_output_packet()
+void formOutputPacket()
 {
 	//filtering current
 	current_filter_sum_value = current_filter_sum_value - current_filter_data[CURRENT_FILTER_COUNTER];
@@ -130,6 +141,38 @@ void from_output_packet()
 	data.ina219_voltage_value = average_voltage_value;
 	data.ina219_power_value = average_power_value;
 	data.terminator = 'EEEE';
+}
+
+void updateTimerPwmParameters(int prescaler, int counterPeriod, int pulse){
+	htim1.Init.Prescaler = prescaler;
+	htim1.Init.Period = counterPeriod;
+	HAL_TIM_Base_Init(&htim1);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pulse);
+}
+
+void updateDutyCycle(int pulse){
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pulse);
+}
+
+void increasingConductivityAlgorithm(){
+	delta_V = average_voltage_value - prev_V;
+	delta_I = average_current_value - prev_I;
+	prev_I = average_current_value;
+	prev_V = average_voltage_value;
+
+	if (delta_V == 0){
+		if(delta_I > 0){
+			updateDutyCycle(40);
+		} else if (delta_I < 0){
+			updateDutyCycle(35);
+		}
+	}
+	if(delta_I/delta_V > -average_current_value/average_voltage_value){
+		updateDutyCycle(40);
+	}else if(delta_I/delta_V < -average_current_value/average_voltage_value){
+		updateDutyCycle(35);
+	}
+
 }
 /* USER CODE END 0 */
 
@@ -170,13 +213,16 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim4);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   setCalibration_32V_1A();
+  updateTimerPwmParameters(800, 100, 100/2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  from_output_packet();
+	  formOutputPacket();
+	  increasingConductivityAlgorithm();
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -276,7 +322,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 80;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 999;
+  htim1.Init.Period = 99;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -300,7 +346,7 @@ static void MX_TIM1_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 449;
+  sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
