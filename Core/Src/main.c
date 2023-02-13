@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "ina219.h"
 #include <stdio.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -32,8 +33,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define CURRENT_MEDIUM_AVERAGE_FILTER_STEP 40
-#define POWER_MEDIUM_AVERAGE_FILTER_STEP 40
+#define CURRENT_MEDIUM_AVERAGE_FILTER_STEP 20
+#define POWER_MEDIUM_AVERAGE_FILTER_STEP 20
 #define VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP 5
 /* USER CODE END PD */
 
@@ -76,7 +77,7 @@ int CURRENT_FILTER_COUNTER = 0;
 int POWER_FILTER_COUNTER = 0;
 int VOLTAGE_FILTER_COUNTER = 0;
 
-// vars for current filter
+// vars for current filter and algos
 float current_filter_data[CURRENT_MEDIUM_AVERAGE_FILTER_STEP] = {0};
 float current_filter_sum_value = 0;
 float current_value = 0;
@@ -84,19 +85,24 @@ float average_current_value = 0;
 float delta_I = 0;
 float prev_I = 0;
 
-// vars for power filter
+// vars for power filter and algos
 float power_filter_data[POWER_MEDIUM_AVERAGE_FILTER_STEP] = {0};
 float power_filter_sum_value = 0;
 float power_value = 0;
 float average_power_value = 0;
+float delta_P = 0;
+float prev_P = 0;
 
-// vars for voltage filter
+// vars for voltage filter and algos
 float voltage_filter_data[VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP] = {0};
 float voltage_filter_sum_value = 0;
 float voltage_value = 0;
 float average_voltage_value = 0;
 float delta_V = 0;
 float prev_V = 0;
+
+//duty cycle value for algorithms
+int duty_cycle = 49;
 
 //uart data structure
 typedef struct
@@ -105,41 +111,52 @@ typedef struct
 	float ina219_current_value; //mA
 	float ina219_voltage_value; //V
 	float ina219_power_value; //mW
+	float delta_V;
+	float delta_I;
+	float duty_cycle;
 	uint32_t terminator;
 }ina219_sensor_data;
 
 ina219_sensor_data data;
 
-void formOutputPacket()
-{
+void getData(){
+	//get data
+	current_value = getCurrent_mA();
+	power_value = getPower_mW();
+	voltage_value = getBusVoltage_V();
+}
+void filterData(){
 	//filtering current
 	current_filter_sum_value = current_filter_sum_value - current_filter_data[CURRENT_FILTER_COUNTER];
-	current_value = getCurrent_mA();
 	current_filter_data[CURRENT_FILTER_COUNTER] = current_value;
-	current_filter_sum_value += current_value;
+	current_filter_sum_value = current_filter_sum_value + current_value;
 	CURRENT_FILTER_COUNTER = (CURRENT_FILTER_COUNTER + 1) % CURRENT_MEDIUM_AVERAGE_FILTER_STEP;
 	average_current_value = current_filter_sum_value / CURRENT_MEDIUM_AVERAGE_FILTER_STEP;
 
 	//filtering power
 	power_filter_sum_value = power_filter_sum_value - power_filter_data[POWER_FILTER_COUNTER];
-	power_value = getPower_mW();
 	power_filter_data[POWER_FILTER_COUNTER] = power_value;
-	power_filter_sum_value += power_value;
+	power_filter_sum_value = power_filter_sum_value + power_value;
 	POWER_FILTER_COUNTER = (POWER_FILTER_COUNTER + 1) % POWER_MEDIUM_AVERAGE_FILTER_STEP;
 	average_power_value = power_filter_sum_value / POWER_MEDIUM_AVERAGE_FILTER_STEP;
 
 	//filtering voltage
 	voltage_filter_sum_value = voltage_filter_sum_value - voltage_filter_data[VOLTAGE_FILTER_COUNTER];
-	voltage_value = getBusVoltage_V();
 	voltage_filter_data[VOLTAGE_FILTER_COUNTER] = voltage_value;
-	voltage_filter_sum_value += voltage_value;
+	voltage_filter_sum_value = voltage_filter_sum_value + voltage_value;
 	VOLTAGE_FILTER_COUNTER = (VOLTAGE_FILTER_COUNTER + 1) % VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP;
 	average_voltage_value = voltage_filter_sum_value / VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP;
+}
 
+void formOutputPacket()
+{
 	data.header = 'NNNN';
 	data.ina219_current_value = average_current_value;
 	data.ina219_voltage_value = average_voltage_value;
 	data.ina219_power_value = average_power_value;
+	data.delta_I = delta_I;
+	data.delta_V = delta_V;
+	data.duty_cycle = duty_cycle;
 	data.terminator = 'EEEE';
 }
 
@@ -154,25 +171,77 @@ void updateDutyCycle(int pulse){
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pulse);
 }
 
+void dutyCycleLimits(){
+	if(duty_cycle < 0){
+		duty_cycle = 0;
+	}else if(duty_cycle > 99){
+		duty_cycle = 99;
+	}
+
+}
+
 void increasingConductivityAlgorithm(){
+	delta_P = average_power_value - prev_P;
+	delta_V = average_voltage_value - prev_V;
+//	delta_P = getPower_mW() - prev_P;
+//	delta_V = getBusVoltage_V() - prev_V;
+	prev_P = average_power_value;
+	prev_V =  average_voltage_value;
+
+	if(delta_P > 0){
+		if(delta_V > 0 ){
+			duty_cycle += 1;
+			dutyCycleLimits();
+			updateDutyCycle(duty_cycle);
+		}else{
+			duty_cycle -= 1;
+			dutyCycleLimits();
+			updateDutyCycle(duty_cycle);
+		}
+	}else if(delta_P < 0){
+		if(delta_V > 0 ){
+			duty_cycle -= 1;
+			dutyCycleLimits();
+			updateDutyCycle(duty_cycle);
+		}else{
+			duty_cycle += 1;
+			dutyCycleLimits();
+			updateDutyCycle(duty_cycle);
+		}
+	}
+}
+
+void perturbationAndObservation(){
 	delta_V = average_voltage_value - prev_V;
 	delta_I = average_current_value - prev_I;
 	prev_I = average_current_value;
 	prev_V = average_voltage_value;
+//	delta_V = getBusVoltage_V() - prev_V;
+//	delta_I = getCurrent_mA() - prev_I;
+//	prev_I = getCurrent_mA();
+//	prev_V = getBusVoltage_V();
 
-	if (delta_V == 0){
+	if (abs(delta_V) <= 0.1){
 		if(delta_I > 0){
-			updateDutyCycle(40);
-		} else if (delta_I < 0){
-			updateDutyCycle(35);
+			duty_cycle += 1;
+			dutyCycleLimits();
+			updateDutyCycle(duty_cycle);
+		} else if(delta_I < 0){
+			duty_cycle -= 1;
+			dutyCycleLimits();
+			updateDutyCycle(duty_cycle);
+		}
+	}else{
+		if(delta_I/delta_V > -average_current_value/average_voltage_value){
+			duty_cycle += 1;
+			dutyCycleLimits();
+			updateDutyCycle(duty_cycle);
+		}else if(delta_I/delta_V < -average_current_value/average_voltage_value){
+			duty_cycle -= 1;
+			dutyCycleLimits();
+			updateDutyCycle(duty_cycle);
 		}
 	}
-	if(delta_I/delta_V > -average_current_value/average_voltage_value){
-		updateDutyCycle(40);
-	}else if(delta_I/delta_V < -average_current_value/average_voltage_value){
-		updateDutyCycle(35);
-	}
-
 }
 /* USER CODE END 0 */
 
@@ -213,15 +282,19 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim4);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   setCalibration_32V_1A();
-  updateTimerPwmParameters(800, 100, 100/2);
+//  updateDutyCycle(49);
+//  updateTimerPwmParameters(800, 100, 100/2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  getData();
+	  filterData();
+	  perturbationAndObservation();
+//	  increasingConductivityAlgorithm();
 	  formOutputPacket();
-	  increasingConductivityAlgorithm();
 
     /* USER CODE END WHILE */
 
@@ -320,7 +393,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 80;
+  htim1.Init.Prescaler = 200;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim1.Init.Period = 99;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -393,7 +466,7 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 80;
+  htim4.Init.Prescaler = 8;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim4.Init.Period = 99;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
