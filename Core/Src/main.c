@@ -102,7 +102,7 @@ float delta_V = 0;
 float prev_V = 0;
 
 //duty cycle value for algorithms
-int duty_cycle = 49;
+int duty_cycle = 80;
 
 //uart data structure
 typedef struct
@@ -113,6 +113,7 @@ typedef struct
 	float ina219_power_value; //mW
 	float delta_V;
 	float delta_I;
+	float delta_P;
 	float duty_cycle;
 	uint32_t terminator;
 }ina219_sensor_data;
@@ -156,6 +157,7 @@ void formOutputPacket()
 	data.ina219_power_value = average_power_value;
 	data.delta_I = delta_I;
 	data.delta_V = delta_V;
+	data.delta_P = delta_P;
 	data.duty_cycle = duty_cycle;
 	data.terminator = 'EEEE';
 }
@@ -180,7 +182,7 @@ void dutyCycleLimits(){
 
 }
 
-void increasingConductivityAlgorithm(){
+void  perturbObserveAlgorithm(){
 	delta_P = average_power_value - prev_P;
 	delta_V = average_voltage_value - prev_V;
 //	delta_P = getPower_mW() - prev_P;
@@ -198,8 +200,8 @@ void increasingConductivityAlgorithm(){
 			dutyCycleLimits();
 			updateDutyCycle(duty_cycle);
 		}
-	}else if(delta_P < 0){
-		if(delta_V > 0 ){
+	}else{
+		if(delta_V < 0 ){
 			duty_cycle -= 1;
 			dutyCycleLimits();
 			updateDutyCycle(duty_cycle);
@@ -211,7 +213,7 @@ void increasingConductivityAlgorithm(){
 	}
 }
 
-void perturbationAndObservation(){
+void incrementalConductanceAlgorithm(){
 	delta_V = average_voltage_value - prev_V;
 	delta_I = average_current_value - prev_I;
 	prev_I = average_current_value;
@@ -220,28 +222,30 @@ void perturbationAndObservation(){
 //	delta_I = getCurrent_mA() - prev_I;
 //	prev_I = getCurrent_mA();
 //	prev_V = getBusVoltage_V();
-
-	if (abs(delta_V) <= 0.1){
+	if (fabs(delta_V) <= 0.1){
 		if(delta_I > 0){
-			duty_cycle += 1;
+			duty_cycle -= 1;
 			dutyCycleLimits();
 			updateDutyCycle(duty_cycle);
 		} else if(delta_I < 0){
-			duty_cycle -= 1;
+			duty_cycle += 1;
 			dutyCycleLimits();
 			updateDutyCycle(duty_cycle);
 		}
 	}else{
-		if(delta_I/delta_V > -average_current_value/average_voltage_value){
-			duty_cycle += 1;
-			dutyCycleLimits();
-			updateDutyCycle(duty_cycle);
-		}else if(delta_I/delta_V < -average_current_value/average_voltage_value){
-			duty_cycle -= 1;
-			dutyCycleLimits();
-			updateDutyCycle(duty_cycle);
-		}
+		if(delta_I/delta_V != -average_current_value/average_voltage_value){
+				if(delta_I/delta_V > -average_current_value/average_voltage_value){
+					duty_cycle -= 1;
+					dutyCycleLimits();
+					updateDutyCycle(duty_cycle);
+				}else{
+					duty_cycle += 1;
+					dutyCycleLimits();
+					updateDutyCycle(duty_cycle);
+				}
+			}
 	}
+
 }
 /* USER CODE END 0 */
 
@@ -292,8 +296,9 @@ int main(void)
   {
 	  getData();
 	  filterData();
-	  perturbationAndObservation();
-//	  increasingConductivityAlgorithm();
+	  incrementalConductanceAlgorithm();
+//	  perturbObserveAlgorithm();
+//	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 100);
 	  formOutputPacket();
 
     /* USER CODE END WHILE */
@@ -508,7 +513,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 19200;
+  huart2.Init.BaudRate = 38400;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
