@@ -102,7 +102,7 @@ float delta_V = 0;
 float prev_V = 0;
 
 //duty cycle value for algorithms
-int duty_cycle = 80;
+int duty_cycle = 40;
 
 //uart data structure
 typedef struct
@@ -192,21 +192,21 @@ void  perturbObserveAlgorithm(){
 
 	if(delta_P > 0){
 		if(delta_V > 0 ){
-			duty_cycle += 1;
+			duty_cycle -= 1;
 			dutyCycleLimits();
 			updateDutyCycle(duty_cycle);
 		}else{
-			duty_cycle -= 1;
+			duty_cycle += 1;
 			dutyCycleLimits();
 			updateDutyCycle(duty_cycle);
 		}
 	}else{
 		if(delta_V < 0 ){
-			duty_cycle -= 1;
+			duty_cycle += 1;
 			dutyCycleLimits();
 			updateDutyCycle(duty_cycle);
 		}else{
-			duty_cycle += 1;
+			duty_cycle -= 1;
 			dutyCycleLimits();
 			updateDutyCycle(duty_cycle);
 		}
