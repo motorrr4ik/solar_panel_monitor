@@ -2077,10 +2077,10 @@ void incrementalConductanceAlgorithm(){
  80013e8:	4603      	mov	r3, r0
  80013ea:	2b00      	cmp	r3, #0
  80013ec:	d00c      	beq.n	8001408 <incrementalConductanceAlgorithm+0x90>
-			duty_cycle -= 1;
+			duty_cycle += 1;
  80013ee:	4b44      	ldr	r3, [pc, #272]	; (8001500 <incrementalConductanceAlgorithm+0x188>)
  80013f0:	681b      	ldr	r3, [r3, #0]
- 80013f2:	3b01      	subs	r3, #1
+ 80013f2:	3301      	adds	r3, #1
  80013f4:	4a42      	ldr	r2, [pc, #264]	; (8001500 <incrementalConductanceAlgorithm+0x188>)
  80013f6:	6013      	str	r3, [r2, #0]
 			dutyCycleLimits();
@@ -2108,10 +2108,10 @@ void incrementalConductanceAlgorithm(){
  800141a:	d100      	bne.n	800141e <incrementalConductanceAlgorithm+0xa6>
 }
  800141c:	e05e      	b.n	80014dc <incrementalConductanceAlgorithm+0x164>
-			duty_cycle += 1;
+			duty_cycle -= 1;
  800141e:	4b38      	ldr	r3, [pc, #224]	; (8001500 <incrementalConductanceAlgorithm+0x188>)
  8001420:	681b      	ldr	r3, [r3, #0]
- 8001422:	3301      	adds	r3, #1
+ 8001422:	3b01      	subs	r3, #1
  8001424:	4a36      	ldr	r2, [pc, #216]	; (8001500 <incrementalConductanceAlgorithm+0x188>)
  8001426:	6013      	str	r3, [r2, #0]
 			dutyCycleLimits();
@@ -2175,10 +2175,10 @@ void incrementalConductanceAlgorithm(){
  80014a4:	4603      	mov	r3, r0
  80014a6:	2b00      	cmp	r3, #0
  80014a8:	d00c      	beq.n	80014c4 <incrementalConductanceAlgorithm+0x14c>
-					duty_cycle -= 1;
+					duty_cycle += 1;
  80014aa:	4b15      	ldr	r3, [pc, #84]	; (8001500 <incrementalConductanceAlgorithm+0x188>)
  80014ac:	681b      	ldr	r3, [r3, #0]
- 80014ae:	3b01      	subs	r3, #1
+ 80014ae:	3301      	adds	r3, #1
  80014b0:	4a13      	ldr	r2, [pc, #76]	; (8001500 <incrementalConductanceAlgorithm+0x188>)
  80014b2:	6013      	str	r3, [r2, #0]
 					dutyCycleLimits();
@@ -2190,10 +2190,10 @@ void incrementalConductanceAlgorithm(){
  80014be:	f7ff ff31 	bl	8001324 <updateDutyCycle>
 }
  80014c2:	e00b      	b.n	80014dc <incrementalConductanceAlgorithm+0x164>
-					duty_cycle += 1;
+					duty_cycle -= 1;
  80014c4:	4b0e      	ldr	r3, [pc, #56]	; (8001500 <incrementalConductanceAlgorithm+0x188>)
  80014c6:	681b      	ldr	r3, [r3, #0]
- 80014c8:	3301      	adds	r3, #1
+ 80014c8:	3b01      	subs	r3, #1
  80014ca:	4a0d      	ldr	r2, [pc, #52]	; (8001500 <incrementalConductanceAlgorithm+0x188>)
  80014cc:	6013      	str	r3, [r2, #0]
 					dutyCycleLimits();
