@@ -1,0 +1,17 @@
+ina219.c:32:6:wireWriteRegister	1
+ina219.c:46:6:wireReadRegister	1
+ina219.c:64:6:setCalibration_32V_2A	1
+ina219.c:154:6:setCalibration_32V_1A	1
+ina219.c:242:6:setCalibration_16V_400mA	1
+ina219.c:331:9:getBusVoltage_raw	1
+ina219.c:345:9:getShuntVoltage_raw	1
+ina219.c:357:9:getCurrent_raw	1
+ina219.c:378:9:getPower_raw	1
+ina219.c:399:7:getShuntVoltage_mV	1
+ina219.c:411:7:getBusVoltage_V	1
+ina219.c:423:7:getCurrent_mA	1
+ina219.c:436:7:getPower_mW	1
+ina219.c:446:5:contMeasureInit	2
+ina219.c:466:5:contMeasureUpdate	3
+ina219.c:488:7:convertMeasure	5
+ina219.c:518:5:getNSamples	1
