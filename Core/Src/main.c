@@ -105,12 +105,10 @@ float delta_V = 0;
 float prev_V = 0;
 
 //duty cycle value for algorithms
-int duty_cycle = 40;
-int test_duty = 0;
+int duty_cycle = 0;
 float load_voltage = 0;
-float prev_load_voltage = 0;
 
-//uart data structure
+//transfer data structure
 typedef struct
 {
 	uint32_t header;
@@ -131,7 +129,7 @@ void getData(){
 	current_value = getCurrent_mA();
 	power_value = getPower_mW();
 	voltage_value = getBusVoltage_V();
-	load_voltage = 3.3*HAL_ADC_GetValue(&hadc1)/4095;
+	load_voltage = 3.3*HAL_ADC_GetValue(&hadc1)/4096;
 	load_voltage = -1*BOOSTER_COEFF*(load_voltage*2-3.3);
 }
 void filterData(){
@@ -187,14 +185,11 @@ void dutyCycleLimits(){
 	}else if(duty_cycle > 99){
 		duty_cycle = 99;
 	}
-
 }
 
 void  perturbObserveAlgorithm(){
 	delta_P = average_power_value - prev_P;
 	delta_V = average_voltage_value - prev_V;
-//	delta_P = getPower_mW() - prev_P;
-//	delta_V = getBusVoltage_V() - prev_V;
 	prev_P = average_power_value;
 	prev_V =  average_voltage_value;
 
@@ -209,7 +204,7 @@ void  perturbObserveAlgorithm(){
 			updateDutyCycle(duty_cycle);
 		}
 	}else{
-		if(delta_V < 0 ){
+		if(delta_V > 0 ){
 			duty_cycle += 1;
 			dutyCycleLimits();
 			updateDutyCycle(duty_cycle);
@@ -226,10 +221,6 @@ void incrementalConductanceAlgorithm(){
 	delta_I = average_current_value - prev_I;
 	prev_I = average_current_value;
 	prev_V = average_voltage_value;
-//	delta_V = load_voltage - prev_load_voltage;
-//	delta_I = average_current_value - prev_I;
-//	prev_load_voltage = load_voltage;
-//	prev_I = average_current_value;
 
 	if (fabs(delta_V) <= 0.1){
 		if(delta_I > 0){
@@ -242,19 +233,16 @@ void incrementalConductanceAlgorithm(){
 			updateDutyCycle(duty_cycle);
 		}
 	}else{
-		if(delta_I/delta_V != -average_current_value/average_voltage_value){
-				if(delta_I/delta_V > -average_current_value/average_voltage_value){
-					duty_cycle -= 1;
-					dutyCycleLimits();
-					updateDutyCycle(duty_cycle);
-				}else{
-					duty_cycle += 1;
-					dutyCycleLimits();
-					updateDutyCycle(duty_cycle);
-				}
-			}
+		if(delta_I/delta_V > -average_current_value/average_voltage_value){
+			duty_cycle -= 1;
+			dutyCycleLimits();
+			updateDutyCycle(duty_cycle);
+		}else{
+			duty_cycle += 1;
+			dutyCycleLimits();
+			updateDutyCycle(duty_cycle);
+		}
 	}
-
 }
 /* USER CODE END 0 */
 
@@ -271,8 +259,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-   HAL_Init();
-
+  HAL_Init();
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
@@ -294,29 +281,20 @@ int main(void)
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start_IT(&htim4);
-
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_ADC_Start(&hadc1);
-//  HAL_ADC_Start_DMA(&hadc1, &test_data, sizeof(test_data));
-  setCalibration_32V_1A();
-//  updateDutyCycle(49);
-//  updateTimerPwmParameters(800, 100, 100/2);
+  setCalibration_16V_400mA();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-//	  test_data = HAL_ADC_GetValue(&hadc1);
-
 	  getData();
 	  filterData();
 	  incrementalConductanceAlgorithm();
 //	  perturbObserveAlgorithm();
-//	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 15);
 	  formOutputPacket();
-//	  HAL_UART_Transmit(&huart2, &data, sizeof(data), 35);
-
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -406,7 +384,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_4;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_13CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_41CYCLES_5;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -644,12 +622,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 {
 	//smile
 	HAL_UART_Transmit_DMA(&huart2, &data, sizeof(data));
-
-//	if(test_duty > 99) test_duty = 99;
-//	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, test_duty);
-//	++test_duty;
-
-
 }
 /* USER CODE END 4 */
 
