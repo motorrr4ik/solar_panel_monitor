@@ -36,6 +36,7 @@
 #define CURRENT_MEDIUM_AVERAGE_FILTER_STEP 5
 #define POWER_MEDIUM_AVERAGE_FILTER_STEP 5
 #define VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP 5
+#define LOAD_VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP 7
 #define BOOSTER_COEFF 6.6
 /* USER CODE END PD */
 
@@ -79,6 +80,7 @@ static void MX_ADC1_Init(void);
 int CURRENT_FILTER_COUNTER = 0;
 int POWER_FILTER_COUNTER = 0;
 int VOLTAGE_FILTER_COUNTER = 0;
+int LOAD_VOLTAGE_FILTER_COUNTER = 0;
 
 // vars for current filter and algos
 float current_filter_data[CURRENT_MEDIUM_AVERAGE_FILTER_STEP] = {0};
@@ -104,9 +106,14 @@ float average_voltage_value = 0;
 float delta_V = 0;
 float prev_V = 0;
 
+// vars for load voltage filter and algos
+float load_voltage_filter_data[LOAD_VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP] = {0};
+float load_voltage_filter_sum_value = 0;
+float load_voltage_value = 0;
+float average_load_voltage_value = 0;
+
 //duty cycle value for algorithms
 int duty_cycle = 0;
-float load_voltage = 0;
 
 //transfer data structure
 typedef struct
@@ -119,6 +126,7 @@ typedef struct
 	float delta_I;
 	float delta_P;
 	float duty_cycle;
+	float load_voltage;
 	uint32_t terminator;
 }ina219_sensor_data;
 
@@ -129,8 +137,8 @@ void getData(){
 	current_value = getCurrent_mA();
 	power_value = getPower_mW();
 	voltage_value = getBusVoltage_V();
-	load_voltage = 3.3*HAL_ADC_GetValue(&hadc1)/4096;
-	load_voltage = -1*BOOSTER_COEFF*(load_voltage*2-3.3);
+	load_voltage_value = 3.3*HAL_ADC_GetValue(&hadc1)/4096;
+	load_voltage_value = -1*BOOSTER_COEFF*(load_voltage_value*2-3.3);
 }
 void filterData(){
 	//filtering current
@@ -153,6 +161,13 @@ void filterData(){
 	voltage_filter_sum_value = voltage_filter_sum_value + voltage_value;
 	VOLTAGE_FILTER_COUNTER = (VOLTAGE_FILTER_COUNTER + 1) % VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP;
 	average_voltage_value = voltage_filter_sum_value / VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP;
+
+	//filtering load voltage
+	load_voltage_filter_sum_value = load_voltage_filter_sum_value - load_voltage_filter_data[LOAD_VOLTAGE_FILTER_COUNTER];
+	load_voltage_filter_data[LOAD_VOLTAGE_FILTER_COUNTER] = load_voltage_value;
+	load_voltage_filter_sum_value = load_voltage_filter_sum_value + load_voltage_value;
+	LOAD_VOLTAGE_FILTER_COUNTER = (LOAD_VOLTAGE_FILTER_COUNTER + 1) % LOAD_VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP;
+	average_load_voltage_value = load_voltage_filter_sum_value / LOAD_VOLTAGE_MEDIUM_AVERAGE_FILTER_STEP;
 }
 
 void formOutputPacket()
@@ -165,6 +180,7 @@ void formOutputPacket()
 	data.delta_V = delta_V;
 	data.delta_P = delta_P;
 	data.duty_cycle = duty_cycle;
+	data.load_voltage = average_load_voltage_value;
 	data.terminator = 'EEEE';
 }
 
